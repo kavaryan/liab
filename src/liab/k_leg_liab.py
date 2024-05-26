@@ -4,18 +4,13 @@ if __name__ == "__main__":
     sys.path.append('src/')
 
 from typing import Dict
-from itertools import chain, combinations
 
 from sympy import Max
 import numpy as np
 from liab.bf import bf
 from liab.failure import ClosedHalfSpace, FailureSet
 from liab.scm import ComponentOrEquation, GSym, System
-
-def subsets_upto(iterable, k):
-    s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(k+1))
-
+from liab.utils import subsets_upto
 
 def k_leg_liab(T: System, S: System, u: Dict[GSym, float], F: FailureSet, *, k: int):
     """Calculate the k-leg liability of each component in T.
