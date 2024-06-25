@@ -23,7 +23,7 @@ class ComponentOrEquation:
         Args:
             I (List[str]): Input variables.
             O (str): Output variable.
-            f (str): Function of the output variable.
+            f (str): Function of the output variable (a symbolic expression of variables in I)
         """
         self.I = I
         self.O = O
