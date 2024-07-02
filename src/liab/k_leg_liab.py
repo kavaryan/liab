@@ -8,7 +8,7 @@ from typing import Dict
 from sympy import Max
 import numpy as np
 from liab.bf import bf
-from liab.failure import ClosedHalfSpace, FailureSet
+from liab.failure import ClosedHalfSpaceFailureSet, FailureSet
 from liab.scm import ComponentOrEquation, GSym, System
 from liab.utils import subsets_upto
 
@@ -24,6 +24,8 @@ def k_leg_liab(T: System, S: System, u: Dict[GSym, float], F: FailureSet, *, k: 
         F (FailureSet): The failure set.
         k (int, always as keyword argument): The number of legs to consider.
     """
+    if not u or not isinstance(u, dict):
+        raise ValueError("The context must be a non-empty dictionary.")
     bf_dict = {}
     M = S.induced_scm()
     N = T.induced_scm(state_order=M.state_order)
@@ -51,8 +53,9 @@ def k_leg_liab(T: System, S: System, u: Dict[GSym, float], F: FailureSet, *, k: 
         liabs[Xi] = X_shares.mean()
 
     keys = [c.O for c in T.cs]
-    laibs = liabs/liabs.sum()
-    return dict(zip(keys, laibs))
+    if liabs.sum() != 0:
+        liabs = liabs/liabs.sum()
+    return dict(zip(keys, liabs))
 
 
 def test_k_leg_liab():
@@ -69,7 +72,7 @@ def test_k_leg_liab():
     T = System([a_im, b_im, c_im, d_im])
 
     u = {'a': 10, 'b': 10, 'c': 10, 'd': 10}
-    F = ClosedHalfSpace({'D': (250, 'ge')})
+    F = ClosedHalfSpaceFailureSet({'D': (250, 'ge')})
 
     assert S.induced_scm().get_state(u)[0] == {'A': 10, 'B': 10, 'C': 10, 'D': 110}
     assert T.induced_scm().get_state(u)[0] == {'A': 20, 'B': 20, 'C': 18, 'D': 420}

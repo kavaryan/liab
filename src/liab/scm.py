@@ -80,7 +80,7 @@ class System:
 
 class SCM:
     def __init__(self, U: List[str], V: List[str], 
-                 cs: List[ComponentOrEquation], state_order: List[str] = None):
+                 cs: List[ComponentOrEquation], state_order: list[str] = None):
         """Represnet a structural causal model (SCM).
         
         Args:
@@ -101,7 +101,7 @@ class SCM:
         tp_sort = list(nx.topological_sort(self.dag))
         # self.context_order = [x for x in tp_sort if x in U]
         if state_order is None:
-            self.state_order = [x for x in tp_sort if x in V]
+            self.state_order = [str(x) for x in tp_sort if x in V]
         else:
             self.state_order = state_order
 
@@ -118,7 +118,13 @@ class SCM:
         for _v in self.state_order:
             _v_sym = eval(self.cs_dict[_v].f)
             locals()[_v] = _v_sym
-            _v_val = float(_v_sym.evalf(subs=_subs))
+            if isinstance(_v_sym, sympy.Basic):
+                try:
+                    _v_val = float(_v_sym.evalf(subs=_subs))
+                except:
+                    _v_val = 0.0 if _v_sym.subs(_subs) == sympy.false else 1.0 
+            else:
+                _v_val = float(_v_sym)
             _ret_dict[_v] = _v_val
             _ret_list.append(_v_val)
             _subs[_v] = _v_val

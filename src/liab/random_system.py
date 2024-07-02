@@ -17,13 +17,13 @@ def all_combs_f(n) -> list[tuple[float]]:
 
 def get_rand_vec_b(n, seed=42):
     """ Get a random Boolean vector. """
-    np.random.seed(seed)
-    return np.random.choice(a=[0, 1], size=(1, n))[0]
+    rnd = np.random.RandomState(seed)
+    return rnd.choice(a=[0, 1], size=(1, n))[0]
 
 def get_rand_vec_f(n, seed=42):
     """ Get a random Boolean vector. """
-    np.random.seed(seed)
-    return np.random.choice(a=[0.0, 1.0], size=(1, n))[0]
+    rnd = np.random.RandomState(seed)
+    return rnd.choice(a=[0.0, 1.0], size=(1, n))[0]
 
 def get_rand_tt_b(n, seed=42) -> dict:
     """ Get a random truth table (i.e., a Boolean function) over n variables. """

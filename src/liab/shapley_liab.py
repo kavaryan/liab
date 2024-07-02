@@ -10,7 +10,7 @@ from itertools import chain, combinations
 from sympy import Max
 import numpy as np
 from liab.bf import bf
-from liab.failure import ClosedHalfSpace, FailureSet
+from liab.failure import ClosedHalfSpaceFailureSet, FailureSet
 from liab.scm import ComponentOrEquation, GSym, System
 from liab.utils import subsets_upto
 
@@ -53,5 +53,6 @@ def shapley_liab(T: System, S: System, u: Dict[GSym, float], F: FailureSet, k: i
         liabs[Xi] =  X_shares.sum()
 
     keys = [c.O for c in T.cs]
-    laibs = liabs/liabs.sum()
-    return dict(zip(keys, laibs))
+    if liabs.sum() != 0:
+        liabs = liabs/liabs.sum()
+    return dict(zip(keys, liabs))

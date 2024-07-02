@@ -43,7 +43,7 @@ def bf(T: System, S: System, X: Union[ComponentOrEquation,List[ComponentOrEquati
 
     # BF1 axiom (in the paper)
     t_dict, _ = N.get_state(u)
-    if not F.conatins(t_dict):
+    if not F.contains(t_dict):
         return False
     
     def _rec_bf(Y):
@@ -64,13 +64,13 @@ def bf(T: System, S: System, X: Union[ComponentOrEquation,List[ComponentOrEquati
         # BF2 axiom (in the paper)
         Z_rep_dict = {c.O: M.cs_dict[c.O] for c in Z}
         z_dict, _  = T.get_replacement(Z_rep_dict).induced_scm(state_order=M.state_order).get_state(u)
-        bf_dict_[Y] = not F.conatins(z_dict)
+        bf_dict_[Y] = not F.contains(z_dict)
         
     _rec_bf(X)
     return bf_dict_[X]
     
 def test_bf():
-    from failure import ClosedHalfSpace
+    from failure import ClosedHalfSpaceFailureSet
     a_sp = ComponentOrEquation(['a'], 'A', 'a')
     b_sp = ComponentOrEquation(['b'], 'B', 'b')
     c_sp = ComponentOrEquation(['c', 'A', 'B'], 'C', 'c+A*B')
@@ -80,7 +80,7 @@ def test_bf():
 
     S = System([a_sp, b_sp, c_sp])
     T = System([a_im, b_im, c_im])
-    F = ClosedHalfSpace({'C': (250, 'ge')})
+    F = ClosedHalfSpaceFailureSet({'C': (250, 'ge')})
     
     assert bf(T, S, a_im, {'a': 10, 'b': 10, 'c': 10}, F)
     assert bf(T, S, b_sp, {'a': 10, 'b': 10, 'c': 10}, F)
