@@ -33,7 +33,7 @@ class ComponentOrEquation:
         return f"ComponentOrEquation(I={self.I}, O={self.O}, f={self.f})"
 
 class System:
-    def __init__(self, cs: List[ComponentOrEquation]):
+    def __init__(self, cs: List[ComponentOrEquation], vars_type):
         """Represnt a multi-compoent system.
         
         Args:
@@ -41,6 +41,7 @@ class System:
         """
         assert len(set([c.O for c in cs])) == len(cs) # No duplicate output variables
         self.cs = cs
+        self.vars_type = vars_type
 
     def induced_scm(self, state_order: List[str] = None) -> "SCM":
         """Get the induced SCM of a system.
@@ -51,7 +52,7 @@ class System:
         V = set([c.O for c in self.cs])
         all = set(flatten([c.I for c in self.cs]))
         U = set(all) - set(V)
-        return SCM(U, V, self.cs, state_order)
+        return SCM(U, V, self.cs, state_order, self.vars_type)
     
     def is_compatible(self, S: "System") -> bool:
         """Check if the system is compatible with a specification.
@@ -73,14 +74,14 @@ class System:
                 cs.append(rep_dict[c.O])
             else:
                 cs.append(c)
-        return System(cs)
+        return System(cs, self.vars_type)
     
     def __repr__(self) -> str:
         return f"System(cs={self.cs})"
 
 class SCM:
     def __init__(self, U: List[str], V: List[str], 
-                 cs: List[ComponentOrEquation], state_order: list[str] = None):
+                 cs: List[ComponentOrEquation], state_order: list[str] = None, vars_type=None):
         """Represnet a structural causal model (SCM).
         
         Args:
@@ -105,7 +106,15 @@ class SCM:
         else:
             self.state_order = state_order
 
+        self.vars_type = vars_type
+
     def get_state(self, _context: Dict[GSym, float]) -> Tuple[Dict[str, float], np.ndarray]:
+        if self.vars_type == float:
+            return self.get_state_f(_context)
+        else:
+            return self.get_state_b(_context)
+
+    def get_state_f(self, _context: Dict[GSym, float]) -> Tuple[Dict[str, float], np.ndarray]:
         """Get the state of the SCM given a context.
         
         Args:
@@ -122,9 +131,34 @@ class SCM:
                 try:
                     _v_val = float(_v_sym.evalf(subs=_subs))
                 except:
-                    _v_val = 0.0 if _v_sym.subs(_subs) == sympy.false else 1.0 
+                    _subs_b = {k:bool(v) for k,v in _subs.items()}
+                    _v_val = 0.0 if _v_sym.subs(_subs_b) == sympy.false else 1.0 
             else:
                 _v_val = float(_v_sym)
+            _ret_dict[_v] = _v_val
+            _ret_list.append(_v_val)
+            _subs[_v] = _v_val
+        return _ret_dict, np.array(_ret_list)
+    
+
+    def get_state_b(self, _context: Dict[GSym, bool]) -> Tuple[Dict[str, bool], np.ndarray]:
+        """Get the state of the SCM given a context.
+        
+        Args:
+            _context (Dict[GSym, float]): Context of the SCM, elsewhere refrerred to as u.
+        """
+        _ret_dict, _ret_list = {}, []
+        _subs = dict(_context)
+        for _u in _context.keys():
+            locals()[_u] = sympy.symbols(_u)
+        for _v in self.state_order:
+            _v_sym = eval(self.cs_dict[_v].f)
+            locals()[_v] = _v_sym
+            if isinstance(_v_sym, sympy.Basic):
+                _subs_b = {k:bool(v) for k,v in _subs.items()}
+                _v_val = 0.0 if _v_sym.subs(_subs_b) == sympy.false else 1.0 
+            else:
+                _v_val = bool(_v_sym)
             _ret_dict[_v] = _v_val
             _ret_list.append(_v_val)
             _subs[_v] = _v_val

@@ -1,12 +1,14 @@
+import random
 import networkx as nx
 import numpy as np
+import re
 from sympy.logic import SOPform
 from liab.scm import ComponentOrEquation, System
 
 def all_combs_b(n) -> list[tuple[int]]:
     """Generate all combinations of binary numbers with n digits."""
     ret = [bin(i)[2:].rjust(n, '0') for i in range(2**n)]
-    ret = [tuple(int(xi) for xi in x) for x in ret]
+    ret = [tuple(bool(int(xi)) for xi in x) for x in ret]
     return ret
 
 def all_combs_f(n) -> list[tuple[float]]:
@@ -37,8 +39,9 @@ def get_rand_tt_f(n, seed=42) -> dict:
     ret = dict(zip(all_combs_f(n), list(fv)))
     return ret
 
-def get_random_system(N, seed=42):
-    """ Create a random DAG. """
+def get_random_system(N, vars_type, seed=42):
+    """ Create a random DAG. N = |U \\cup V|, the total number of variables
+    """
     G=nx.gnp_random_graph(N,0.5,directed=True,seed=seed)
     G=nx.DiGraph([(u,v) for (u,v) in G.edges() if u<v])
     assert nx.is_directed_acyclic_graph(G)
@@ -46,6 +49,12 @@ def get_random_system(N, seed=42):
     # V = set(f'v_{n}' for n,d in G.in_degree() if d==0)
 
     cs = []
+
+    def change_not(input_string):
+        result = re.sub(r'~(\w+)', r'(not \1)', input_string)
+        result = re.sub(r'~\((.*?)\)', r'(not(\1))', result)
+        return result
+
     for n in G.nodes:
         preds = list(G.predecessors(n))
         if len(preds) == 0: # This is an exogenous variable
@@ -53,23 +62,42 @@ def get_random_system(N, seed=42):
         rand_tt = get_rand_tt_b(len(preds), seed)
         minterms = [list(k) for k,v in rand_tt.items() if v]
         vars = [f'x_{k}' for k in preds]
-        eq = str(SOPform(vars, minterms))
+        eq = change_not(str(SOPform(vars, minterms)))
+        # eq = str(SOPform(vars, minterms))
         c = ComponentOrEquation(vars, f'x_{n}', eq)
         cs.append(c)
 
-    return System(cs)
+    return System(cs, vars_type)
 
 def rerand_system(S: System, seed=42):
+    def change_not(input_string):
+        result = re.sub(r'~(\w+)', r'(not \1)', input_string)
+        result = re.sub(r'~\((.*?)\)', r'(not(\1))', result)
+        return result
+    
     new_cs = []
     for c in S.cs:
         rand_tt = get_rand_tt_b(len(c.I), seed)
         minterms = [list(k) for k,v in rand_tt.items() if v]
         vars = [k for k in c.I]
-        eq = str(SOPform(vars, minterms))
+        eq = change_not(str(SOPform(vars, minterms)))
         c = ComponentOrEquation(vars, c.O, eq)
         new_cs.append(c)
 
-    return System(new_cs)
+    return System(new_cs, S.vars_type)
+
+
+def get_rand_prop(vars: list, num_syms=3, seed=42):
+    def change_not(input_string):
+        result = re.sub(r'~(\w+)', r'(not \1)', input_string)
+        result = re.sub(r'~\((.*?)\)', r'(not(\1))', result)
+        return result
+    
+    syms = random.sample(vars, k=num_syms)
+    rand_tt = get_rand_tt_b(len(syms), seed)
+    minterms = [list(k) for k,v in rand_tt.items() if v]
+    ret = change_not(str(SOPform(syms, minterms)))
+    return ret
 
 def test_all_combs():
     assert all_combs_b(2) == [(0, 0), (0, 1), (1, 0), (1, 1)]
