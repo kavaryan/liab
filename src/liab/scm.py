@@ -1,4 +1,4 @@
-"""Define classes for defining failure."""
+"""Define classes for defining components, systems, and SCMs."""
 
 from typing import Union, List, Dict, Tuple, Callable
 import functools
@@ -30,18 +30,19 @@ class ComponentOrEquation:
         self.f = f
 
     def __repr__(self) -> str:
-        return f"ComponentOrEquation(I={self.I}, O={self.O}, f={self.f})"
+        return f"ComponentOrEquation(I={self.I}, O={self.O} ({type(self.O)}), f={self.f})"
 
 class System:
-    def __init__(self, cs: List[ComponentOrEquation], vars_type):
+    def __init__(self, cs: List[ComponentOrEquation], func_type):
         """Represnt a multi-compoent system.
         
         Args:
             cs (List[Component]): List of components.
+            func_type: Type of equations: `binary` or `linear`
         """
         assert len(set([c.O for c in cs])) == len(cs) # No duplicate output variables
         self.cs = cs
-        self.vars_type = vars_type
+        self.func_type = func_type
 
     def induced_scm(self, state_order: List[str] = None) -> "SCM":
         """Get the induced SCM of a system.
@@ -52,7 +53,7 @@ class System:
         V = set([c.O for c in self.cs])
         all = set(flatten([c.I for c in self.cs]))
         U = set(all) - set(V)
-        return SCM(U, V, self.cs, state_order, self.vars_type)
+        return SCM(U, V, self.cs, state_order, self.func_type)
     
     def is_compatible(self, S: "System") -> bool:
         """Check if the system is compatible with a specification.
@@ -74,14 +75,14 @@ class System:
                 cs.append(rep_dict[c.O])
             else:
                 cs.append(c)
-        return System(cs, self.vars_type)
+        return System(cs, self.func_type)
     
     def __repr__(self) -> str:
         return f"System(cs={self.cs})"
 
 class SCM:
     def __init__(self, U: List[str], V: List[str], 
-                 cs: List[ComponentOrEquation], state_order: list[str] = None, vars_type=None):
+                 cs: List[ComponentOrEquation], state_order: list[str] = None, func_type=None):
         """Represnet a structural causal model (SCM).
         
         Args:
@@ -90,6 +91,7 @@ class SCM:
             cs (List[Component]): List of components.
             state_order (List[str], optional): Order of the states passed to SCM constructor,
                 useful when constructing an implementation from an specification.
+            func_type: Type of equations: `binary` or `linear`
         """
         self.U = U
         self.V = V
@@ -106,13 +108,13 @@ class SCM:
         else:
             self.state_order = state_order
 
-        self.vars_type = vars_type
+        self.func_type = func_type
 
     def get_state(self, _context: Dict[GSym, float]) -> Tuple[Dict[str, float], np.ndarray]:
-        if self.vars_type == float:
-            return self.get_state_f(_context)
-        else:
+        if self.func_type == 'binary':
             return self.get_state_b(_context)
+        else:
+            return self.get_state_f(_context)
 
     def get_state_f(self, _context: Dict[GSym, float]) -> Tuple[Dict[str, float], np.ndarray]:
         """Get the state of the SCM given a context.
@@ -131,8 +133,7 @@ class SCM:
                 try:
                     _v_val = float(_v_sym.evalf(subs=_subs))
                 except:
-                    _subs_b = {k:bool(v) for k,v in _subs.items()}
-                    _v_val = 0.0 if _v_sym.subs(_subs_b) == sympy.false else 1.0 
+                    raise
             else:
                 _v_val = float(_v_sym)
             _ret_dict[_v] = _v_val

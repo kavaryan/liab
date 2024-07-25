@@ -3,9 +3,12 @@
 from abc import ABC, abstractmethod
 from itertools import combinations
 import random
+import re
 from typing import Union, List, Dict, Tuple, Callable
 import numpy as np
 import sympy as sp
+import z3
+from liab.scm import SCM
 
 class FailureSet(ABC):
     @abstractmethod
@@ -40,16 +43,22 @@ class FailureSet(ABC):
 class ClosedHalfSpaceFailureSet(FailureSet):
     def __init__(self, bounadry_dict: Dict[str, Tuple[float, str]]):
         """ Represents a closed half-space in n-dimensional space in the form 
-            x_i >= a_i or x_i <= b_i for i = 1, 2, ..., n.
+            And_i(x_i >= a_i | x_i <= a_i) for i = 1, 2, ..., n.
         
         Args:
             boundary_dict (Dict[str, float]): A dictionary representing the boundaries:
-                key: the name of the variable, value: the boundary value and type
+                key: the name of the variable
+                value: the boundary value and type
                     boundary value: a float representing the value of the boundary,
                     boundary type: a string ('ge' for >=, 'le' for <=)
                         defining the type of inequality for each boundary.
         """
         self.boundary_dict = bounadry_dict
+
+    def __str__(self):
+        _symbolize = {'le': '<=', 'ge': '>='}
+        s = ','.join(f'{k}{_symbolize[bt]}{bv:.2f}' for k,(bv,bt) in self.boundary_dict.items())
+        return f'ClosedHalfSpaceFailureSet({s})'
     
     def contains(self, x: Dict[str, float]) -> bool:
         """Check if a given point is in the failure set.
@@ -58,12 +67,8 @@ class ClosedHalfSpaceFailureSet(FailureSet):
             x (Dict[str, float]): A dictionary representing the point with keys as the variable names.
         """
         for k, v in self.boundary_dict.items():
-            if v[1] == 'ge':
-                if x[k] < v[0]:
-                    return False
-            elif v[1] == 'le':
-                if x[k] > v[0]:
-                    return False
+            if (v[1] == 'ge' and x[k] < v[0]) or (v[1] == 'le' and x[k] > v[0]):
+                return False
         return True
 
     def dist(self, x: Dict[str, float]) -> float:
@@ -75,11 +80,68 @@ class ClosedHalfSpaceFailureSet(FailureSet):
             x (Dict[str, float]): A dictionary representing the point with keys as the variable names.
         """
         return min([abs(x[k] - v[0]) for k, v in self.boundary_dict.items()])
+    
+
+    def get_example_context(self, M: SCM, N: SCM):
+        """ Find a context where the resulting M-state is not failed and N-state is failed. """
+
+        solver = z3.Solver()
+        
+        # Create variables
+        for x in M.U:
+            xx = z3.Real(x)
+            exec(f'{x} = xx')
+        for x in M.V:
+            xm = f'm_{x}'
+            xx = z3.Real(xm)
+            exec(f'{xm}=xx')
+        for x in N.V:
+            xn = f'n_{x}'
+            xx = z3.Real(xn)
+            exec(f'{xn}=xx')
+        
+        # Add M equations
+        for c_o, c in M.cs_dict.items():
+            c_o = f'm_{c_o}'
+            ceq = c.f
+            for x in M.V:
+                ceq = re.sub(rf'\b{x}\b', f'm_{x}', ceq)
+            solver.add(eval(f'{c_o}=={ceq}'))
+
+        # Add N equations
+        for c_o, c in N.cs_dict.items():
+            c_o = f'n_{c_o}'
+            ceq = c.f
+            for x in M.V:
+                ceq = re.sub(rf'\b{x}\b', f'n_{x}', ceq)
+            solver.add(eval(f'{c_o}=={ceq}'))
+
+        # Add non-failure for M constraint 
+        or_args = []
+        for k, v in self.boundary_dict.items():
+            or_args.append(eval(f'm_{k} < {v[0]}' if v[1] == 'ge' else f'm_{k} > {v[0]}'))
+            solver.add(eval(f'n_{k} > {v[0]}' if v[1] == 'ge' else f'n_{k} < {v[0]}'))
+        
+        solver.add(z3.Or(or_args))
+        ret = None
+        if solver.check() == z3.sat:
+            model = solver.model()
+            ret = {}
+            for k in M.U:
+                # `as_decimal` returns a string 
+                ret[k] = float(model[eval(k)].as_decimal(17).split('?')[0])
+
+            state_m, _ = M.get_state(ret)
+            state_n, _ = N.get_state(ret)
+            if self.contains(state_m) or not self.contains(state_n):
+                # assert False
+                ...
+        return ret
 
 
-class BooleanFormulaFailureSet(FailureSet):
+class QFFOFormulaFailureSet(FailureSet):
     def __init__(self, failure_formual: sp.Basic):
-        """ Represents a failure set defined by a Boolean formula.
+        """ Represents a failure set defined by a quantifier-free first-order formula.
         
         Args:
             failure_formual (sp.FunctionClass): A sympy function representing the failure set.
@@ -108,7 +170,7 @@ class BooleanFormulaFailureSet(FailureSet):
             else:
                 bf = op(bf, syms[i])
 
-        return BooleanFormulaFailureSet(bf)
+        return QFFOFormulaFailureSet(bf)
     
     def contains(self, x: Dict[str, float]) -> bool:
         """Check if a given point is in the failure set.
@@ -156,7 +218,7 @@ def test_closed_half_space_failure_set():
 def test_boolean_formula_failure_set():
     x, y = sp.symbols('x y')
     f = x & y
-    bfs = BooleanFormulaFailureSet(f)
+    bfs = QFFOFormulaFailureSet(f)
     assert bfs.contains({'x': True, 'y': True})
     assert not bfs.contains({'x': True, 'y': False})
     assert 1 == bfs.dist({'x': True, 'y': False})
@@ -165,7 +227,7 @@ def test_boolean_formula_failure_set():
 
     x, y, z = sp.symbols('x y z')
     f = x & y & z
-    bfs = BooleanFormulaFailureSet(f)
+    bfs = QFFOFormulaFailureSet(f)
     assert bfs.contains({'x': True, 'y': True, 'z': True})
     assert not bfs.contains({'x': True, 'y': True, 'z': False})
     assert 1 == bfs.dist({'x': True, 'y': True, 'z': False})
