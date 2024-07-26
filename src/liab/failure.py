@@ -82,10 +82,12 @@ class ClosedHalfSpaceFailureSet(FailureSet):
         return min([abs(x[k] - v[0]) for k, v in self.boundary_dict.items()])
     
 
-    def get_example_context(self, M: SCM, N: SCM):
+    def get_example_context(self, M: SCM, N: SCM, seed=42):
         """ Find a context where the resulting M-state is not failed and N-state is failed. """
 
         solver = z3.Solver()
+        solver.set('random_seed', seed)
+        solver.set('arith.random_initial_value', False)
         
         # Create variables
         for x in M.U:
