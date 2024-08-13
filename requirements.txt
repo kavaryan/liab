@@ -4,3 +4,4 @@ numpy
 sympy
 z3-solver
 scipy
+scikit-learn

@@ -23,6 +23,10 @@ def k_leg_liab(T: System, S: System, u: Dict[GSym, float], F: FailureSet, *, k: 
         u (Dict[GSym, float]): The context as a dictionary with keys as the variable names.
         F (FailureSet): The failure set.
         k (int, always as keyword argument): The number of legs to consider.
+
+    Return:
+        k_leg liability of ENDOGENOUS components as a dict. The length of returned dict is
+            not the same as the total number of system variables. 
     """
     if not u or not isinstance(u, dict):
         raise ValueError("The context must be a non-empty dictionary.")
